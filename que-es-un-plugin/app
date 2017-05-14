@@ -1,0 +1,133 @@
+#!/usr/bin/python
+# -*- encoding:utf-8 -*-
+
+from ui import Interfaz
+
+import imp
+import sys
+import os
+
+class Manejador:
+  """
+  app.Manejador
+  -------------
+
+  Componente encargado de gestionar los plugins instalados.
+  """
+
+  def __init__(self, nucleo):
+    self.nucleo = nucleo
+    self.__plugins = dict()
+
+  def carga(self, nombre):
+    """
+    app.Manejador.carga()
+    ---------------------
+
+    Busca el plugin especificado, y carga el módulo correspondiente
+    """
+    archivo, ruta, info = imp.find_module(nombre)
+    plugin = imp.load_module(nombre, archivo, ruta, info)
+
+    if plugin.activo():
+      plugin.iniciar(self.nucleo)
+      self.__plugins[nombre] = plugin
+    else:
+      plugin = None
+
+    return plugin
+
+class Nucleo:
+  """
+  app.Nucleo
+
+  Este componente se encarga de conectar la interfaz de usuario con cada uno de
+  los plugins disponibles.
+  """
+  def __init__(self):
+    self.__ruta = os.path.join(os.path.realpath('.'), 'plugins')
+    self.__interfaz = None
+    self.__manejador = Manejador(self)
+
+  def carga_plugins(self):
+    """
+    app.Nucleo.carga_plugins()
+    --------------------------
+
+    Lee el directorio donde se espera estén instalados los plugins y los carga
+    en tiempo de ejecución.
+
+    DEVUELVE
+      * Nada
+    """
+    # Revisa si el directorio de plugins existe, y lo crea si es necesario
+    if not os.path.exists(self.__ruta):
+      os.makedirs(self.__ruta)
+    sys.path.append(self.__ruta)
+
+    # Función para quitar la extensión del nombre del plugin
+    # Se espera que cada plugin sea un módulo de python: *.py
+    filtro  = lambda plug: ".py" == plug[-3:]
+    nombre  = lambda plug: plug[:-3]
+    plugins = map(nombre, filter(filtro, os.listdir(self.__ruta)))
+
+    for nombre in plugins:
+      plugin = self.__manejador.carga(nombre)
+      if plugin:
+        self.__interfaz.agrega(nombre, plugin.hacer)
+
+  def asigna_interfaz(self, interfaz):
+    """
+    app.Nucleo.asigna_interfaz()
+    ----------------------------
+
+    Conecta el núcleo de la aplicación con la interfaz gráfica
+
+    DEVUELVE
+      * Nada
+    """
+    self.__interfaz = interfaz
+
+  def leer_entrada(self):
+    """
+    app.Nucleo.leer_entrada()
+    -------------------------
+
+    Lee texto desde la interfaz
+
+    DEVUELVE
+      * Nada
+    """
+    return self.__interfaz.leer_entrada()
+
+  def escribir_salida(self, texto):
+    """
+    app.Nucleo.escribir_salida()
+    ----------------------------
+
+    Escribe texto en la interfaz
+
+    DEVUELVE
+      * Nada
+    """
+    self.__interfaz.escribir_salida(texto)
+
+  def limpiar(self):
+    self.__interfaz.limpiar()
+
+def main():
+  """
+  main
+  ----
+
+  Función principal
+  """
+  gui = Interfaz()
+  nuc = Nucleo()
+  nuc.asigna_interfaz(gui)
+  nuc.carga_plugins()
+  gui.pack()
+  gui.master.mainloop()
+
+if __name__ == '__main__':
+  main()
